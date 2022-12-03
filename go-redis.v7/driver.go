@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	resque.Register("redis-go", &drv{})
+	resque.Register("go-redis", &drv{})
 }
 
 type drv struct {
