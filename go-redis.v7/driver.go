@@ -1,13 +1,13 @@
 package resque
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/fiorix/go-redis/redis"
-	"github.com/kavu/go-resque"
-	"github.com/kavu/go-resque/driver"
+	"github.com/go-redis/redis/v7"
+	"github.com/szmcdull/go-resque"
+	"github.com/szmcdull/go-resque/driver"
 )
 
 func init() {
@@ -29,9 +29,12 @@ func (d *drv) SetClient(name string, client interface{}) {
 
 func (d *drv) ListPush(queue string, jobJSON string) (int64, error) {
 	// Ensure the queue exists
-	_, err := d.client.SAdd(d.nameSpace+"queues", queue)
+	_, err := d.client.SAdd(d.nameSpace+"queues", queue).Result()
+	if err != nil {
+		return -1, err
+	}
 
-	listLength, err := d.client.RPush(d.nameSpace+"queue:"+queue, jobJSON)
+	listLength, err := d.client.RPush(d.nameSpace+"queue:"+queue, jobJSON).Result()
 	if err != nil {
 		return -1, err
 	}
@@ -39,7 +42,7 @@ func (d *drv) ListPush(queue string, jobJSON string) (int64, error) {
 	return int64(listLength), err
 }
 func (d *drv) ListPushDelay(t time.Time, queue string, jobJSON string) (bool, error) {
-	_, err := d.client.ZAdd(queue, t.UnixNano(), jobJSON)
+	_, err := d.client.ZAdd(queue, &redis.Z{Score: float64(t.UnixNano()), Member: jobJSON}).Result()
 	if err != nil {
 		return false, err
 	}
@@ -54,12 +57,16 @@ func (d *drv) Poll() {
 		for {
 			for key := range d.schedule {
 				now := time.Now()
-				k := fmt.Sprintf("%s -inf %d", key, now.UnixNano())
-				jobs, _ := d.client.ZRangeByScore(k, 0, 1, true, true, 0, 1)
+				jobs, _ := d.client.ZRangeByScore(key, &redis.ZRangeBy{
+					Min:    `-inf`,
+					Max:    strconv.FormatInt(now.UnixNano(), 10),
+					Offset: 0,
+					Count:  1,
+				}).Result()
 				if len(jobs) == 0 {
 					continue
 				}
-				removed, _ := d.client.ZRem(key, jobs[0])
+				removed, _ := d.client.ZRem(key, jobs[0]).Result()
 				if removed == 0 {
 					queue := strings.TrimPrefix(key, d.nameSpace)
 					d.client.LPush(d.nameSpace+"queue:"+queue, jobs[0])

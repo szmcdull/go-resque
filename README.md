@@ -2,6 +2,14 @@
 
 Simple [Resque](https://github.com/defunkt/resque) queue client for [Go](http://golang.org).
 
+## Introduction
+This is a fork of [go-resque](https://github.com/kavu/go-resque).
+
+Modifications:
+- go mod
+- added go-redis@v7 driver
+- remove drivers that no long exist.
+
 ## Installation
 
 Installation is simple and familiar for Go programmers:
